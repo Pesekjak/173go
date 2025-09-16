@@ -5,23 +5,22 @@ import (
 
 	"github.com/Pesekjak/173go/pkg/cmd"
 	"github.com/Pesekjak/173go/pkg/cons"
-	"github.com/Pesekjak/173go/pkg/evt"
-	"github.com/Pesekjak/173go/pkg/file"
 	"github.com/Pesekjak/173go/pkg/log"
 	"github.com/Pesekjak/173go/pkg/net"
 	"github.com/Pesekjak/173go/pkg/prot"
 	"github.com/Pesekjak/173go/pkg/system"
+	"github.com/Pesekjak/173go/pkg/world"
 )
 
 type Server struct {
 	message chan system.Message
 
-	file.Config
+	Config
 
 	*cons.Console
-
-	*evt.EventManager
 	*cmd.CommandManager
+
+	defaultWorld *world.World
 
 	clients []Client
 }
@@ -29,22 +28,22 @@ type Server struct {
 func NewServer() *Server {
 	message := make(chan system.Message)
 
-	config := file.NewDefaultConfig()
-
+	config := NewDefaultConfig()
 	console := cons.NewConsole(os.Stdin, os.Stdout, log.BasicLevels...)
 
-	eventManager := evt.NewEventManager()
-	commandManager := cmd.NewCommandManager()
+	defaultWorld := world.NewWorld()
+
+	commandManager := cmd.NewCommandManager(console.ChildLogger("cmd"))
 
 	server := &Server{
 		message: message,
 
 		Config: config,
 
-		Console: console,
-
-		EventManager:   eventManager,
+		Console:        console,
 		CommandManager: commandManager,
+
+		defaultWorld: defaultWorld,
 
 		clients: make([]Client, 8),
 	}
@@ -69,10 +68,6 @@ func (s *Server) Start() {
 	}
 
 	s.Console.Info("server is running")
-	s.EventManager.FireEvent(evt.Event{
-		Type: StartEvt,
-		Data: StartEventData{Server: s},
-	})
 	s.wait()
 }
 

@@ -61,6 +61,10 @@ func (l *Logger) Levels() []Level {
 	return levels
 }
 
+func (l *Logger) ChildLogger(name string) *Logger {
+	return NewLogger(name, l.writer, l.Levels()...)
+}
+
 func (l *Logger) logf(level Level, format string, a ...interface{}) {
 	if !l.enabledLevels[level] {
 		return

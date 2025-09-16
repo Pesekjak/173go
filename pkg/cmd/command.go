@@ -3,23 +3,35 @@ package cmd
 import (
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Pesekjak/173go/pkg/log"
 )
 
+// CommandManager manager of server commands.
 type CommandManager struct {
 	commands map[string]Command
+	logger   *log.Logger
 }
 
+// Command executable command by any CommandSender
 type Command struct {
-	Label      string
-	Usage      string
+	// Label used to run the command
+	Label string
+	// Usage string displayed if the command execution fails
+	Usage string
+	// Permission required to execute the command
 	Permission string
-	Handler    func(sender Sender, args []string) bool
+	// Handler for the command logic. Source of the command and arguments split at space and trimmed are provided
+	Handler func(sender CommandSender, args []string) bool
 }
 
-func NewCommandManager() *CommandManager {
-	return &CommandManager{commands: make(map[string]Command)}
+// NewCommandManager provides new empty CommandManager
+func NewCommandManager(logger *log.Logger) *CommandManager {
+	return &CommandManager{commands: make(map[string]Command), logger: logger}
 }
 
+// RegisterCommand registers new command, fails and returns false if there is already a command with the same
+// label registered, else returns true
 func (cm *CommandManager) RegisterCommand(cmd Command) bool {
 	if _, ok := cm.commands[cmd.Label]; ok {
 		return false
@@ -28,7 +40,11 @@ func (cm *CommandManager) RegisterCommand(cmd Command) bool {
 	return true
 }
 
-func (cm *CommandManager) ExecuteCommand(sender Sender, buffer string) bool {
+// ExecuteCommand executes the command with given source and buffer.
+// Buffer is a whole command string (without the starting '/').
+// Returns true if the command execution was successful, else false.
+// Sends extra messages to the source in case the execution fails (about missing permissions, incorrect usage...)
+func (cm *CommandManager) ExecuteCommand(sender CommandSender, buffer string) bool {
 	buffer = strings.TrimSpace(buffer)
 	if utf8.RuneCountInString(buffer) == 0 {
 		return false // empty command
@@ -57,6 +73,7 @@ func (cm *CommandManager) ExecuteCommand(sender Sender, buffer string) bool {
 		sender.SendMessage("you do not have permissions to execute this command")
 	}
 
+	cm.logger.Info(sender, " executed command: /", buffer)
 	result := cmd.Handler(sender, parameters)
 
 	if !result {

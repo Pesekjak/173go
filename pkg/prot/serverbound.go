@@ -31,12 +31,12 @@ type PacketInLogin struct {
 }
 
 func (p *PacketInLogin) Pull(buf *buff.MCReader) error {
-	puller := newPuller(buf)
-	puller.pull(func() { p.Protocol, puller.err = buf.ReadInt() })
-	puller.pull(func() { p.Username, puller.err = buf.ReadString16() })
-	puller.pull(func() { p.MapSeed, puller.err = buf.ReadLong() })
-	puller.pull(func() { p.Dimension, puller.err = buf.ReadByte() })
-	return puller.err
+	puller := buff.NewPuller(buf)
+	puller.Pull(func() { p.Protocol, puller.Err = buf.ReadInt() })
+	puller.Pull(func() { p.Username, puller.Err = buf.ReadString16() })
+	puller.Pull(func() { p.MapSeed, puller.Err = buf.ReadLong() })
+	puller.Pull(func() { p.Dimension, puller.Err = buf.ReadByte() })
+	return puller.Err
 }
 
 func (p *PacketInLogin) Handle(handler PacketHandler) error {
@@ -48,9 +48,9 @@ type PacketInHandShake struct {
 }
 
 func (p *PacketInHandShake) Pull(buf *buff.MCReader) error {
-	puller := newPuller(buf)
-	puller.pull(func() { p.Username, puller.err = buf.ReadString16() })
-	return puller.err
+	puller := buff.NewPuller(buf)
+	puller.Pull(func() { p.Username, puller.Err = buf.ReadString16() })
+	return puller.Err
 }
 
 func (p *PacketInHandShake) Handle(handler PacketHandler) error {
@@ -66,13 +66,13 @@ type PacketInPlayerPosition struct {
 }
 
 func (p *PacketInPlayerPosition) Pull(buf *buff.MCReader) error {
-	puller := newPuller(buf)
-	puller.pull(func() { p.X, puller.err = buf.ReadDouble() })
-	puller.pull(func() { p.Y, puller.err = buf.ReadDouble() })
-	puller.pull(func() { p.Stance, puller.err = buf.ReadDouble() })
-	puller.pull(func() { p.Z, puller.err = buf.ReadDouble() })
-	puller.pull(func() { p.OnGround, puller.err = buf.ReadBool() })
-	return puller.err
+	puller := buff.NewPuller(buf)
+	puller.Pull(func() { p.X, puller.Err = buf.ReadDouble() })
+	puller.Pull(func() { p.Y, puller.Err = buf.ReadDouble() })
+	puller.Pull(func() { p.Stance, puller.Err = buf.ReadDouble() })
+	puller.Pull(func() { p.Z, puller.Err = buf.ReadDouble() })
+	puller.Pull(func() { p.OnGround, puller.Err = buf.ReadBool() })
+	return puller.Err
 }
 
 func (p *PacketInPlayerPosition) Handle(handler PacketHandler) error {
@@ -90,15 +90,15 @@ type PacketInPlayerPositionAndLook struct {
 }
 
 func (p *PacketInPlayerPositionAndLook) Pull(buf *buff.MCReader) error {
-	puller := newPuller(buf)
-	puller.pull(func() { p.X, puller.err = buf.ReadDouble() })
-	puller.pull(func() { p.Y, puller.err = buf.ReadDouble() })
-	puller.pull(func() { p.Stance, puller.err = buf.ReadDouble() })
-	puller.pull(func() { p.Z, puller.err = buf.ReadDouble() })
-	puller.pull(func() { p.Yaw, puller.err = buf.ReadFloat() })
-	puller.pull(func() { p.Pitch, puller.err = buf.ReadFloat() })
-	puller.pull(func() { p.OnGround, puller.err = buf.ReadBool() })
-	return puller.err
+	puller := buff.NewPuller(buf)
+	puller.Pull(func() { p.X, puller.Err = buf.ReadDouble() })
+	puller.Pull(func() { p.Y, puller.Err = buf.ReadDouble() })
+	puller.Pull(func() { p.Stance, puller.Err = buf.ReadDouble() })
+	puller.Pull(func() { p.Z, puller.Err = buf.ReadDouble() })
+	puller.Pull(func() { p.Yaw, puller.Err = buf.ReadFloat() })
+	puller.Pull(func() { p.Pitch, puller.Err = buf.ReadFloat() })
+	puller.Pull(func() { p.OnGround, puller.Err = buf.ReadBool() })
+	return puller.Err
 }
 
 func (p *PacketInPlayerPositionAndLook) Handle(handler PacketHandler) error {

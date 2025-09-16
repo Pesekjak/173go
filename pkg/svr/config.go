@@ -1,4 +1,4 @@
-package file
+package svr
 
 type Config struct {
 	Address string `json:"address"`

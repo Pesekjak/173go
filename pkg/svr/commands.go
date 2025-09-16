@@ -7,7 +7,7 @@ func registerCommands(server *Server) {
 		Label:      "stop",
 		Usage:      "/stop",
 		Permission: "server.stop",
-		Handler: func(sender cmd.Sender, args []string) bool {
+		Handler: func(sender cmd.CommandSender, args []string) bool {
 			if len(args) != 0 {
 				return false
 			}

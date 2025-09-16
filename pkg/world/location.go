@@ -1,11 +1,9 @@
-package base
+package world
 
 import (
 	"fmt"
 	"math"
 )
-
-const ChunkWidth = 16
 
 type Location struct {
 	X     float64
@@ -21,9 +19,9 @@ func NewLocation(x, y, z float64, yaw, pitch float32) Location {
 
 func (l Location) ToBlockPos() BlockPos {
 	return BlockPos{
-		X: int(math.Floor(l.X)),
-		Y: int(math.Floor(l.Y)),
-		Z: int(math.Floor(l.Z)),
+		X: int32(math.Floor(l.X)),
+		Y: int32(math.Floor(l.Y)),
+		Z: int32(math.Floor(l.Z)),
 	}
 }
 
@@ -75,12 +73,12 @@ func (l Location) String() string {
 }
 
 type BlockPos struct {
-	X int
-	Y int
-	Z int
+	X int32
+	Y int32
+	Z int32
 }
 
-func NewBlockPos(x, y, z int) BlockPos {
+func NewBlockPos(x, y, z int32) BlockPos {
 	return BlockPos{X: x, Y: y, Z: z}
 }
 
@@ -88,47 +86,49 @@ func (p BlockPos) Add(other BlockPos) BlockPos {
 	return BlockPos{X: p.X + other.X, Y: p.Y + other.Y, Z: p.Z + other.Z}
 }
 
-func (p BlockPos) Offset(dx, dy, dz int) BlockPos {
+func (p BlockPos) Offset(dx, dy, dz int32) BlockPos {
 	return BlockPos{X: p.X + dx, Y: p.Y + dy, Z: p.Z + dz}
 }
 
-func (p BlockPos) Up(n int) BlockPos {
+func (p BlockPos) Up(n int32) BlockPos {
 	return p.Offset(0, n, 0)
 }
 
-func (p BlockPos) Down(n int) BlockPos {
+func (p BlockPos) Down(n int32) BlockPos {
 	return p.Offset(0, -n, 0)
 }
 
-func (p BlockPos) North(n int) BlockPos {
+func (p BlockPos) North(n int32) BlockPos {
 	return p.Offset(0, 0, -n)
 }
 
-func (p BlockPos) South(n int) BlockPos {
+func (p BlockPos) South(n int32) BlockPos {
 	return p.Offset(0, 0, n)
 }
 
-func (p BlockPos) East(n int) BlockPos {
+func (p BlockPos) East(n int32) BlockPos {
 	return p.Offset(n, 0, 0)
 }
 
-func (p BlockPos) West(n int) BlockPos {
+func (p BlockPos) West(n int32) BlockPos {
 	return p.Offset(-n, 0, 0)
 }
 
 func (p BlockPos) ToChunkPos() ChunkPos {
-	chunkX := int(math.Floor(float64(p.X) / float64(ChunkWidth)))
-	chunkZ := int(math.Floor(float64(p.Z) / float64(ChunkWidth)))
-	return ChunkPos{X: chunkX, Z: chunkZ}
+	return ChunkPos{X: p.X >> 4, Z: p.Z >> 4}
 }
 
 func (p BlockPos) String() string {
 	return fmt.Sprintf("BlockPos(X: %d, Y: %d, Z: %d)", p.X, p.Y, p.Z)
 }
 
+func NewChunkPos(x, z int32) ChunkPos {
+	return ChunkPos{X: x, Z: z}
+}
+
 type ChunkPos struct {
-	X int
-	Z int
+	X int32
+	Z int32
 }
 
 func (c ChunkPos) String() string {

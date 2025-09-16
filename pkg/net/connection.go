@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/Pesekjak/173go/pkg/base"
+	"github.com/Pesekjak/173go/pkg/chat"
 	"github.com/Pesekjak/173go/pkg/log"
 	"github.com/Pesekjak/173go/pkg/prot"
 	"github.com/Pesekjak/173go/pkg/system"
@@ -115,6 +116,7 @@ func (c *Connection) WritePacket(packet prot.PacketOut, flush bool) error {
 		return io.ErrClosedPipe
 	}
 
+	c.logger.Info("send packet: ", packet)
 	if err := prot.WritePacket(packet, c.writer); err != nil {
 		return err
 	}
@@ -154,9 +156,11 @@ func (c *Connection) CloseWith(err error, reason string) {
 	}
 
 	if err != nil {
-		c.logger.Severe("closed connection ", c, " due to: ", err)
+		c.logger.Severe("closed connection ", c, ": ", err)
+	} else if reason != "" {
+		c.logger.Info("closed connection ", c, ": ", chat.StripColorCodes(reason))
 	} else {
-		c.logger.Info("closed connection ", c) // TODO append reason if not empty, need to remove color codes
+		c.logger.Info("closed connection ", c)
 	}
 
 	err = c.tcp.Close()
