@@ -8,7 +8,7 @@ import (
 	"github.com/Pesekjak/173go/pkg/net"
 	"github.com/Pesekjak/173go/pkg/prot"
 	"github.com/Pesekjak/173go/pkg/world"
-	"github.com/Pesekjak/173go/pkg/world/material"
+	"github.com/Pesekjak/173go/pkg/world/entity_data"
 )
 
 type Client struct {
@@ -17,7 +17,10 @@ type Client struct {
 
 	logger *log.Logger
 
+	id       int32
 	username string
+	location world.Location
+	world    *world.World
 }
 
 func NewClient(server *Server, connection *net.Connection) *Client {
@@ -39,11 +42,15 @@ func (c *Client) OnLogin(packet *prot.PacketInLogin) error {
 
 	defaultWorld := c.server.defaultWorld
 
+	c.id = base.NextEntityId()
+	c.location = world.NewLocation(0, 0, 0, 0, 0)
+	c.world = defaultWorld
+
 	err := c.connection.WritePacket(&prot.PacketOutLogin{
-		EntityId:   base.NextEntityId(),
+		EntityId:   c.id,
 		ServerName: "", // empty on Notchian
 		MapSeed:    0,  // unused by client
-		Dimension:  byte(defaultWorld.Dimension),
+		Dimension:  byte(defaultWorld.Dimension()),
 	}, false)
 	if err != nil {
 		return err
@@ -61,25 +68,14 @@ func (c *Client) OnLogin(packet *prot.PacketInLogin) error {
 	}
 
 	err = c.connection.WritePacket(&prot.PacketOutTimeUpdate{
-		Time: defaultWorld.Time,
+		Time: defaultWorld.Time(),
 	}, false)
 	if err != nil {
 		return err
 	}
 
-	for i := 0; i < 4; i++ {
-		for j := 0; j < 4; j++ {
-			chunk := world.NewChunk(world.NewChunkPos(int32(i), int32(j)), 127, func(blocks []world.Block) error {
-				return nil
-			})
-			for x := 0; x < 16; x++ {
-				for z := 0; z < 16; z++ {
-					block, _ := chunk.GetBlock(int32(x), 0, int32(z))
-					block.Set(material.Stone, 0)
-				}
-			}
-			chunk.Load(c.connection)
-		}
+	if err = defaultWorld.SpawnPlayer(c); err != nil {
+		return err
 	}
 
 	return c.connection.WritePacket(&prot.PacketOutPlayerPositionAndLook{
@@ -103,12 +99,60 @@ func (c *Client) OnHandShake(packet *prot.PacketInHandShake) error {
 	return c.connection.WritePacket(&prot.PacketOutHandShake{Hash: "-"}, true)
 }
 
+func (c *Client) OnPlayerGround(*prot.PacketInPlayerGround) error {
+	return nil
+}
+
 func (c *Client) OnPlayerPosition(*prot.PacketInPlayerPosition) error {
+	return nil
+}
+
+func (c *Client) OnPlayerLook(*prot.PacketInPlayerLook) error {
 	return nil
 }
 
 func (c *Client) OnPlayerPositionAndLook(*prot.PacketInPlayerPositionAndLook) error {
 	return nil
+}
+
+func (c *Client) Id() int32 {
+	return c.id
+}
+
+func (c *Client) Location() world.Location {
+	return c.location
+}
+
+func (c *Client) World() *world.World {
+	return c.world
+}
+
+func (c *Client) EntityType() world.EntityType {
+	return world.Player
+}
+
+func (c *Client) IsAlive() bool {
+	return true
+}
+
+func (c *Client) Health() uint32 {
+	return 20
+}
+
+func (c *Client) Metadata() entity_data.Metadata {
+	return struct{}{}
+}
+
+func (c *Client) Username() string {
+	return c.username
+}
+
+func (c *Client) IsOnline() bool {
+	return c.connection.IsActive()
+}
+
+func (c *Client) Connection() *net.Connection {
+	return c.connection
 }
 
 func (c *Client) Disconnect(err error) {

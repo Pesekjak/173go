@@ -8,7 +8,9 @@ func init() {
 	RegisterIn(0x00, func() PacketIn { return &PacketInKeepAlive{} })
 	RegisterIn(0x01, func() PacketIn { return &PacketInLogin{} })
 	RegisterIn(0x02, func() PacketIn { return &PacketInHandShake{} })
+	RegisterIn(0x0A, func() PacketIn { return &PacketInPlayerGround{} })
 	RegisterIn(0x0B, func() PacketIn { return &PacketInPlayerPosition{} })
+	RegisterIn(0x0C, func() PacketIn { return &PacketInPlayerLook{} })
 	RegisterIn(0x0D, func() PacketIn { return &PacketInPlayerPositionAndLook{} })
 }
 
@@ -57,6 +59,20 @@ func (p *PacketInHandShake) Handle(handler PacketHandler) error {
 	return handler.OnHandShake(p)
 }
 
+type PacketInPlayerGround struct {
+	OnGround bool
+}
+
+func (p *PacketInPlayerGround) Pull(buf *buff.MCReader) error {
+	puller := buff.NewPuller(buf)
+	puller.Pull(func() { p.OnGround, puller.Err = buf.ReadBool() })
+	return puller.Err
+}
+
+func (p *PacketInPlayerGround) Handle(handler PacketHandler) error {
+	return handler.OnPlayerGround(p)
+}
+
 type PacketInPlayerPosition struct {
 	X        float64
 	Y        float64
@@ -77,6 +93,24 @@ func (p *PacketInPlayerPosition) Pull(buf *buff.MCReader) error {
 
 func (p *PacketInPlayerPosition) Handle(handler PacketHandler) error {
 	return handler.OnPlayerPosition(p)
+}
+
+type PacketInPlayerLook struct {
+	Yaw      float32
+	Pitch    float32
+	OnGround bool
+}
+
+func (p *PacketInPlayerLook) Pull(buf *buff.MCReader) error {
+	puller := buff.NewPuller(buf)
+	puller.Pull(func() { p.Yaw, puller.Err = buf.ReadFloat() })
+	puller.Pull(func() { p.Pitch, puller.Err = buf.ReadFloat() })
+	puller.Pull(func() { p.OnGround, puller.Err = buf.ReadBool() })
+	return puller.Err
+}
+
+func (p *PacketInPlayerLook) Handle(handler PacketHandler) error {
+	return handler.OnPlayerLook(p)
 }
 
 type PacketInPlayerPositionAndLook struct {

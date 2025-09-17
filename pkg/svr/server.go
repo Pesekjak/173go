@@ -25,13 +25,16 @@ type Server struct {
 	clients []Client
 }
 
-func NewServer() *Server {
+func NewServer() (*Server, error) {
 	message := make(chan system.Message)
 
 	config := NewDefaultConfig()
 	console := cons.NewConsole(os.Stdin, os.Stdout, log.BasicLevels...)
 
-	defaultWorld := world.NewWorld()
+	defaultWorld, err := world.NewWorld()
+	if err != nil {
+		return nil, err
+	}
 
 	commandManager := cmd.NewCommandManager(console.ChildLogger("cmd"))
 
@@ -48,7 +51,7 @@ func NewServer() *Server {
 		clients: make([]Client, 8),
 	}
 
-	return server
+	return server, nil
 }
 
 func (s *Server) Start() {
@@ -65,6 +68,14 @@ func (s *Server) Start() {
 	}); err != nil {
 		s.Console.Severe("failed to start the network server: ", err)
 		return
+	}
+
+	for x := int32(-4); x <= 4; x++ {
+		for z := int32(-4); z <= 4; z++ {
+			if _, err := s.defaultWorld.LoadChunk(world.NewChunkPos(x, z)); err != nil {
+				s.Console.Severe("failed to load the chunk at ", x, ";", z, ": ", err)
+			}
+		}
 	}
 
 	s.Console.Info("server is running")

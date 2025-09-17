@@ -44,13 +44,13 @@ func NewConnection(tcp *net.TCPConn, logger *log.Logger, report chan system.Mess
 	}
 }
 
-func (c *Connection) isActive() bool {
+func (c *Connection) IsActive() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.listening && !c.closed
 }
 
-func (c *Connection) isClosed() bool {
+func (c *Connection) IsClosed() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.closed
@@ -116,7 +116,6 @@ func (c *Connection) WritePacket(packet prot.PacketOut, flush bool) error {
 		return io.ErrClosedPipe
 	}
 
-	c.logger.Info("send packet: ", packet)
 	if err := prot.WritePacket(packet, c.writer); err != nil {
 		return err
 	}
@@ -126,6 +125,10 @@ func (c *Connection) WritePacket(packet prot.PacketOut, flush bool) error {
 		}
 	}
 	return nil
+}
+
+func (c *Connection) Flush() error {
+	return c.writer.Flush()
 }
 
 func (c *Connection) Close(err error) {

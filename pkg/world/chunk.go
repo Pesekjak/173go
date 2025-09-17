@@ -5,122 +5,108 @@ import (
 	"compress/zlib"
 	"fmt"
 
-	"github.com/Pesekjak/173go/pkg/net"
-	"github.com/Pesekjak/173go/pkg/prot"
 	"github.com/Pesekjak/173go/pkg/world/material"
 )
 
-type Block interface {
-	Position() BlockPos
-	Material() *material.Block
-	Data() byte
-
-	Set(block *material.Block, data byte) error
-}
+const ChunkSize uint32 = 16
+const DefaultChunkHeight byte = 128
 
 type Chunk struct {
 	pos    ChunkPos
 	height byte
-	blocks map[uint16]Block
 
-	updater func(blocks []Block) error
+	valid bool
 
-	cached []byte
+	blocks []Block
+
+	blockTypes    []byte
+	blockMetadata []byte
+	blockLight    *light
+	skyLight      *light
+
+	cache     []byte
+	updater   func(block Block) error
+	generated bool
 }
 
-func NewChunk(pos ChunkPos, height byte, updater func(blocks []Block) error) *Chunk {
-	return &Chunk{
-		pos:     pos,
-		height:  height,
-		blocks:  make(map[uint16]Block, 16*16*int(height)),
-		updater: updater,
-		cached:  nil,
+func newChunk(pos ChunkPos, height byte, updater func(block Block) error) (*Chunk, error) {
+	bCount := ChunkSize * uint32(height) * ChunkSize
+	c := &Chunk{
+		pos:    pos,
+		height: height,
+
+		valid: true,
+
+		blocks: make([]Block, bCount),
+
+		blockTypes:    make([]byte, bCount),
+		blockMetadata: make([]byte, bCount/2),
+		blockLight:    newLight(height),
+		skyLight:      newLight(height),
+
+		cache:     nil,
+		updater:   updater,
+		generated: false,
 	}
+
+	for i := uint32(0); i < bCount; i++ {
+		x, y, z := blockPos(i, height)
+		bPos := NewBlockPos(c.pos.X*int32(ChunkSize)+int32(x), int32(y), c.pos.Z*int32(ChunkSize)+int32(z))
+		mat, err := material.FromID(uint16(c.blockTypes[i]))
+		if err != nil || mat.(*material.Block) == nil {
+			return nil, fmt.Errorf("failed to create block from ID %v", c.blockTypes[i])
+		}
+		data := c.blockMetadata[i/2]
+		if i%2 == 0 {
+			data = data & 0x0F
+		} else {
+			data = (data & 0xF0) >> 4
+		}
+		b := &chunkBlock{
+			owner:    c,
+			pos:      bPos,
+			material: mat.(*material.Block),
+			data:     data,
+		}
+		c.blocks[i] = b
+	}
+
+	return c, nil
 }
 
-func (c *Chunk) GetBlock(x, y, z int32) (Block, error) {
-	if x >= 16 || z >= 16 || y < 0 || y > int32(c.height) { // TODO height should be exclusive
+func (c *Chunk) GetBlock(x, y, z uint32) (Block, error) {
+	if x >= ChunkSize || z >= ChunkSize || y >= uint32(c.height) {
 		return nil, fmt.Errorf("coodinates %v;%v;%v are out of bounds of a chunk", x, y, z)
 	}
-	i := blockIndex(x, y, z)
-	if b, ok := c.blocks[i]; ok {
-		return b, nil
-	}
-
-	b := c.createBlock(x, y, z)
-	c.blocks[i] = b
-	return b, nil
+	i := blockIndex(x, y, z, c.height)
+	return c.blocks[i], nil
 }
 
-func (c *Chunk) Load(conn *net.Connection) error {
-	err := conn.WritePacket(&prot.PacketOutPreChunk{
-		X:    c.pos.X,
-		Z:    c.pos.Z,
-		Load: true,
-	}, false)
+func (c *Chunk) Height() byte {
+	return c.height
+}
+
+func (c *Chunk) data() ([]byte, error) {
+	if c.cache != nil {
+		return c.cache, nil
+	}
+
+	uncompressedData := append(c.blockTypes, c.blockMetadata...)
+	uncompressedData = append(uncompressedData, c.blockLight.data...)
+	uncompressedData = append(uncompressedData, c.skyLight.data...)
+
+	var compressedData bytes.Buffer
+	writer := zlib.NewWriter(&compressedData)
+	_, err := writer.Write(uncompressedData)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	dataPacket := prot.PacketOutMapChunk{
-		X:     c.pos.X * 16,
-		Y:     0,
-		Z:     c.pos.Z * 16,
-		SizeX: 15,
-		SizeY: 127,
-		SizeZ: 15,
-		Data:  c.cached,
+	err = writer.Close()
+	if err != nil {
+		return nil, err
 	}
-
-	if c.cached == nil {
-		fmt.Println("creating chunk data")
-		sizeX := 16
-		sizeY := 128
-		sizeZ := 16
-
-		blockTypes := make([]byte, sizeX*sizeY*sizeZ)
-		blockMetadata := make([]byte, (sizeX*sizeY*sizeZ)/2)
-		blockLight := make([]byte, (sizeX*sizeY*sizeZ)/2)
-		skyLight := make([]byte, (sizeX*sizeY*sizeZ)/2)
-
-		for x := 0; x < sizeX; x++ {
-			for z := 0; z < sizeZ; z++ {
-				for y := 0; y < sizeY; y++ {
-					index := y + (z * sizeY) + (x * sizeY * sizeZ)
-					block, err := c.GetBlock(int32(x), int32(y), int32(z))
-					if block == nil {
-						fmt.Println("wtf:", err)
-						continue
-					}
-
-					blockTypes[index] = byte(block.Material().Id())
-
-					if index%2 == 0 {
-						blockMetadata[index/2] = block.Data() & 0x0F
-						blockLight[index/2] = 0x00
-						skyLight[index/2] = 0x0F
-					} else {
-						blockMetadata[index/2] |= (block.Data() & 0x0F) << 4
-						blockLight[index/2] |= 0x00 << 4
-						skyLight[index/2] |= 0x0F << 4
-					}
-				}
-			}
-		}
-
-		uncompressedData := append(blockTypes, blockMetadata...)
-		uncompressedData = append(uncompressedData, blockLight...)
-		uncompressedData = append(uncompressedData, skyLight...)
-
-		var compressedData bytes.Buffer
-		writer := zlib.NewWriter(&compressedData)
-		writer.Write(uncompressedData)
-		writer.Close()
-
-		c.cached = compressedData.Bytes()
-		dataPacket.Data = c.cached
-	}
-
-	return conn.WritePacket(&dataPacket, true)
+	c.cache = compressedData.Bytes()
+	return c.cache, nil
 }
 
 type chunkBlock struct {
@@ -145,19 +131,39 @@ func (c *chunkBlock) Data() byte {
 func (c *chunkBlock) Set(block *material.Block, data byte) error {
 	c.material = block
 	c.data = data
-	c.owner.cached = nil // invalidate cached chunk data
-	return c.owner.updater([]Block{c})
-}
+	c.owner.cache = nil // invalidate cached chunk data
 
-func (c *Chunk) createBlock(x, y, z int32) Block {
-	return &chunkBlock{
-		owner:    c,
-		pos:      NewBlockPos(c.pos.X*16+x, y, c.pos.Z*16+z),
-		material: material.Air,
-		data:     0,
+	chunkX := uint32(c.pos.X) % ChunkSize
+	chunkY := uint32(c.pos.Y)
+	chunkZ := uint32(c.pos.Z) % ChunkSize
+	index := blockIndex(chunkX, chunkY, chunkZ, c.owner.height)
+
+	c.owner.blockTypes[index] = byte(block.Id())
+
+	metaIndex := index / 2
+	if index%2 == 0 {
+		c.owner.blockMetadata[metaIndex] = (c.owner.blockMetadata[metaIndex] & 0xF0) | (data & 0x0F)
+	} else {
+		c.owner.blockMetadata[metaIndex] = (c.owner.blockMetadata[metaIndex] & 0x0F) | ((data & 0x0F) << 4)
 	}
+
+	if !c.owner.generated {
+		return nil // chunk is not yet generated, no need to send block updates
+	}
+	return c.owner.updater(c)
 }
 
-func blockIndex(x, y, z int32) uint16 {
-	return uint16(y) | (uint16(z) << 8) | (uint16(x) << 12)
+func blockIndex(x, y, z uint32, height byte) uint32 {
+	height32 := uint32(height)
+	return y + (z * height32) + (x * height32 * ChunkSize)
+}
+
+func blockPos(i uint32, height byte) (x, y, z uint32) {
+	height32 := uint32(height)
+	layerSize := height32 * ChunkSize
+	x = i / layerSize
+	remainder := i % layerSize
+	z = remainder / height32
+	y = remainder % height32
+	return x, y, z
 }

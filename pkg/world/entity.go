@@ -3,6 +3,7 @@ package world
 import (
 	"fmt"
 
+	"github.com/Pesekjak/173go/pkg/net"
 	"github.com/Pesekjak/173go/pkg/world/entity_data"
 )
 
@@ -91,19 +92,33 @@ func GetEntityTypeId(entityType EntityType) (int, error) {
 }
 
 type Entity interface {
-	Id() int
+	Id() int32
 	Location() Location
+	World() *World
 	EntityType() EntityType
 }
 
 type MobEntity interface {
 	Entity
+	IsAlive() bool
+	Health() uint32
 	Metadata() entity_data.Metadata
 }
 
 type ObjectEntity interface {
+	Entity
 }
 
 type PaintingEntity interface {
-	entity_data.ArtType
+	Entity
+	ArtType() entity_data.ArtType
+}
+
+type PlayerEntity interface {
+	MobEntity
+	Username() string
+	IsOnline() bool
+	Connection() *net.Connection
+	Disconnect(error)
+	Kick(string)
 }
