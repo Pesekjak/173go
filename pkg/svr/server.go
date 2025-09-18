@@ -48,7 +48,7 @@ func NewServer() (*Server, error) {
 
 		defaultWorld: defaultWorld,
 
-		clients: make([]Client, 8),
+		clients: make([]Client, 0, 8),
 	}
 
 	return server, nil

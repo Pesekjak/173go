@@ -10,7 +10,6 @@ type World struct {
 	dimension  Dimension
 	SpawnPoint BlockPos
 	time       int64
-	height     byte
 
 	generator Generator
 
@@ -23,7 +22,6 @@ func NewWorld() (*World, error) {
 	dimension := Overworld
 	spawnPoint := NewBlockPos(0, 60, 0)
 	time := int64(0)
-	height := DefaultChunkHeight
 
 	generator, err := MakeStandardFlatGenerator()
 	if err != nil {
@@ -38,7 +36,6 @@ func NewWorld() (*World, error) {
 		dimension:  dimension,
 		SpawnPoint: spawnPoint,
 		time:       time,
-		height:     height,
 
 		generator: generator,
 
@@ -54,10 +51,6 @@ func (w *World) Dimension() Dimension {
 
 func (w *World) Time() int64 {
 	return w.time
-}
-
-func (w *World) Height() byte {
-	return w.height
 }
 
 func (w *World) SpawnPlayer(player PlayerEntity) error {
@@ -85,7 +78,7 @@ func (w *World) SpawnPlayer(player PlayerEntity) error {
 			Y:     0,
 			Z:     pos.Z * 16,
 			SizeX: byte(ChunkSize) - 1,
-			SizeY: chunk.height - 1,
+			SizeY: byte(ChunkHeight) - 1,
 			SizeZ: byte(ChunkSize) - 1,
 			Data:  chunkData,
 		}
@@ -103,7 +96,7 @@ func (w *World) LoadChunk(pos ChunkPos) (*Chunk, error) {
 		return loaded, nil
 	}
 
-	chunk, err := newChunk(pos, w.height, func(block Block) error {
+	chunk, err := newChunk(pos, func(block Block) error {
 		return nil // no block updates for now
 	})
 	if err != nil {
@@ -112,6 +105,14 @@ func (w *World) LoadChunk(pos ChunkPos) (*Chunk, error) {
 	if err = w.generator.GenerateBlocks(chunk); err != nil {
 		return nil, err
 	}
+	if err = lightChunkBorders(w, chunk); err != nil {
+		return nil, err
+	}
 	w.chunks[pos] = chunk
 	return chunk, nil
+}
+
+func (w *World) Chunk(pos ChunkPos) (*Chunk, bool) {
+	c, ok := w.chunks[pos]
+	return c, ok
 }

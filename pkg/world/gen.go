@@ -64,11 +64,10 @@ func MakeFlatGenerator(params ...interface{}) (*FlatGenerator, error) {
 
 func (g *FlatGenerator) GenerateBlocks(chunk *Chunk) error {
 	y := uint32(0)
-	cHeight := uint32(chunk.Height())
 
 	for _, layer := range g.Layers {
 		for level := uint32(0); level < layer.Height; level++ {
-			if y == cHeight {
+			if y == ChunkHeight {
 				return nil // the flat generator reached max world height
 			}
 

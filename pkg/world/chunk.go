@@ -8,12 +8,13 @@ import (
 	"github.com/Pesekjak/173go/pkg/world/material"
 )
 
-const ChunkSize uint32 = 16
-const DefaultChunkHeight byte = 128
+const (
+	ChunkHeight uint32 = 128
+	ChunkSize   uint32 = 16
+)
 
 type Chunk struct {
-	pos    ChunkPos
-	height byte
+	pos ChunkPos
 
 	valid bool
 
@@ -29,11 +30,10 @@ type Chunk struct {
 	generated bool
 }
 
-func newChunk(pos ChunkPos, height byte, updater func(block Block) error) (*Chunk, error) {
-	bCount := ChunkSize * uint32(height) * ChunkSize
+func newChunk(pos ChunkPos, updater func(block Block) error) (*Chunk, error) {
+	bCount := ChunkSize * ChunkHeight * ChunkSize
 	c := &Chunk{
-		pos:    pos,
-		height: height,
+		pos: pos,
 
 		valid: true,
 
@@ -41,8 +41,8 @@ func newChunk(pos ChunkPos, height byte, updater func(block Block) error) (*Chun
 
 		blockTypes:    make([]byte, bCount),
 		blockMetadata: make([]byte, bCount/2),
-		blockLight:    newLight(height),
-		skyLight:      newLight(height),
+		blockLight:    newLight(),
+		skyLight:      newLight(),
 
 		cache:     nil,
 		updater:   updater,
@@ -50,8 +50,7 @@ func newChunk(pos ChunkPos, height byte, updater func(block Block) error) (*Chun
 	}
 
 	for i := uint32(0); i < bCount; i++ {
-		x, y, z := blockPos(i, height)
-		bPos := NewBlockPos(c.pos.X*int32(ChunkSize)+int32(x), int32(y), c.pos.Z*int32(ChunkSize)+int32(z))
+		x, y, z := blockPos(i)
 		mat, err := material.FromID(uint16(c.blockTypes[i]))
 		if err != nil || mat.(*material.Block) == nil {
 			return nil, fmt.Errorf("failed to create block from ID %v", c.blockTypes[i])
@@ -62,28 +61,40 @@ func newChunk(pos ChunkPos, height byte, updater func(block Block) error) (*Chun
 		} else {
 			data = (data & 0xF0) >> 4
 		}
-		b := &chunkBlock{
-			owner:    c,
-			pos:      bPos,
-			material: mat.(*material.Block),
-			data:     data,
+		block, err := c.GetBlock(x, y, z)
+		if err != nil {
+			return nil, err
 		}
-		c.blocks[i] = b
+		err = block.Set(mat.(*material.Block), data)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c, nil
 }
 
-func (c *Chunk) GetBlock(x, y, z uint32) (Block, error) {
-	if x >= ChunkSize || z >= ChunkSize || y >= uint32(c.height) {
-		return nil, fmt.Errorf("coodinates %v;%v;%v are out of bounds of a chunk", x, y, z)
-	}
-	i := blockIndex(x, y, z, c.height)
-	return c.blocks[i], nil
+func (c *Chunk) Pos() ChunkPos {
+	return c.pos
 }
 
-func (c *Chunk) Height() byte {
-	return c.height
+func (c *Chunk) GetBlock(x, y, z uint32) (Block, error) {
+	if _, err := inChunkBounds(x, y, z); err != nil {
+		return nil, err
+	}
+	i := blockIndex(x, y, z)
+	if block := c.blocks[i]; block != nil {
+		return block, nil
+	} else {
+		block = &chunkBlock{
+			owner:    c,
+			pos:      NewBlockPos(c.Pos().X*16+int32(x), int32(y), c.Pos().Z*16+int32(z)),
+			material: material.Air,
+			data:     0,
+		}
+		c.blocks[i] = block
+		return block, nil
+	}
 }
 
 func (c *Chunk) data() ([]byte, error) {
@@ -116,54 +127,65 @@ type chunkBlock struct {
 	data     byte
 }
 
-func (c *chunkBlock) Position() BlockPos {
-	return c.pos
+func (b *chunkBlock) Position() BlockPos {
+	return b.pos
 }
 
-func (c *chunkBlock) Material() *material.Block {
-	return c.material
+func (b *chunkBlock) Material() *material.Block {
+	return b.material
 }
 
-func (c *chunkBlock) Data() byte {
-	return c.data
+func (b *chunkBlock) Data() byte {
+	return b.data
 }
 
-func (c *chunkBlock) Set(block *material.Block, data byte) error {
-	c.material = block
-	c.data = data
-	c.owner.cache = nil // invalidate cached chunk data
+func (b *chunkBlock) Set(block *material.Block, data byte) error {
+	b.material = block
+	b.data = data
+	b.owner.cache = nil // invalidate cached chunk data
 
-	chunkX := uint32(c.pos.X) % ChunkSize
-	chunkY := uint32(c.pos.Y)
-	chunkZ := uint32(c.pos.Z) % ChunkSize
-	index := blockIndex(chunkX, chunkY, chunkZ, c.owner.height)
+	chunkX := uint32(b.pos.X) % ChunkSize
+	chunkY := uint32(b.pos.Y)
+	chunkZ := uint32(b.pos.Z) % ChunkSize
+	index := blockIndex(chunkX, chunkY, chunkZ)
 
-	c.owner.blockTypes[index] = byte(block.Id())
+	b.owner.blockTypes[index] = byte(block.Id())
 
 	metaIndex := index / 2
 	if index%2 == 0 {
-		c.owner.blockMetadata[metaIndex] = (c.owner.blockMetadata[metaIndex] & 0xF0) | (data & 0x0F)
+		b.owner.blockMetadata[metaIndex] = (b.owner.blockMetadata[metaIndex] & 0xF0) | (data & 0x0F)
 	} else {
-		c.owner.blockMetadata[metaIndex] = (c.owner.blockMetadata[metaIndex] & 0x0F) | ((data & 0x0F) << 4)
+		b.owner.blockMetadata[metaIndex] = (b.owner.blockMetadata[metaIndex] & 0x0F) | ((data & 0x0F) << 4)
 	}
 
-	if !c.owner.generated {
+	if emission := block.LightEmission(); emission != 0 {
+		if err := b.owner.blockLight.propagate(b.owner, chunkX, chunkY, chunkZ, emission); err != nil {
+			return err
+		}
+	}
+
+	if !b.owner.generated {
 		return nil // chunk is not yet generated, no need to send block updates
 	}
-	return c.owner.updater(c)
+	return b.owner.updater(b)
 }
 
-func blockIndex(x, y, z uint32, height byte) uint32 {
-	height32 := uint32(height)
-	return y + (z * height32) + (x * height32 * ChunkSize)
+func blockIndex(x, y, z uint32) uint32 {
+	return y + (z * ChunkHeight) + (x * ChunkHeight * ChunkSize)
 }
 
-func blockPos(i uint32, height byte) (x, y, z uint32) {
-	height32 := uint32(height)
-	layerSize := height32 * ChunkSize
+func blockPos(i uint32) (x, y, z uint32) {
+	layerSize := ChunkHeight * ChunkSize
 	x = i / layerSize
 	remainder := i % layerSize
-	z = remainder / height32
-	y = remainder % height32
+	z = remainder / ChunkHeight
+	y = remainder % ChunkHeight
 	return x, y, z
+}
+
+func inChunkBounds(x, y, z uint32) (bool, error) {
+	if x >= ChunkSize || z >= ChunkSize || y >= ChunkHeight {
+		return false, fmt.Errorf("coodinates %v;%v;%v are out of bounds of a chunk", x, y, z)
+	}
+	return true, nil
 }

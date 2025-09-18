@@ -114,6 +114,10 @@ func (p BlockPos) West(n int32) BlockPos {
 	return p.Offset(-n, 0, 0)
 }
 
+func (p BlockPos) Neighbours() [6]BlockPos {
+	return [...]BlockPos{p.Up(1), p.Down(1), p.North(1), p.South(1), p.East(1), p.West(1)}
+}
+
 func (p BlockPos) ToChunkPos() ChunkPos {
 	return ChunkPos{X: p.X >> 4, Z: p.Z >> 4}
 }
@@ -129,6 +133,19 @@ func NewChunkPos(x, z int32) ChunkPos {
 type ChunkPos struct {
 	X int32
 	Z int32
+}
+
+func (p ChunkPos) Add(other ChunkPos) ChunkPos {
+	return ChunkPos{X: p.X + other.X, Z: p.Z + other.Z}
+}
+
+func (c ChunkPos) Neighbours() [4]ChunkPos {
+	return [...]ChunkPos{
+		{c.X + 1, c.Z},
+		{c.X + 1, c.Z + 1},
+		{c.X - 1, c.Z},
+		{c.X - 1, c.Z - 1},
+	}
 }
 
 func (c ChunkPos) String() string {
