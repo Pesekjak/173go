@@ -14,7 +14,8 @@ const (
 )
 
 type Chunk struct {
-	pos ChunkPos
+	world *World
+	pos   ChunkPos
 
 	valid bool
 
@@ -30,10 +31,11 @@ type Chunk struct {
 	generated bool
 }
 
-func newChunk(pos ChunkPos, updater func(block Block) error) (*Chunk, error) {
+func newChunk(world *World, pos ChunkPos, updater func(block Block) error) (*Chunk, error) {
 	bCount := ChunkSize * ChunkHeight * ChunkSize
 	c := &Chunk{
-		pos: pos,
+		world: world,
+		pos:   pos,
 
 		valid: true,
 
@@ -159,7 +161,7 @@ func (b *chunkBlock) Set(block *material.Block, data byte) error {
 	}
 
 	if emission := block.LightEmission(); emission != 0 {
-		if err := b.owner.blockLight.propagate(b.owner, chunkX, chunkY, chunkZ, emission); err != nil {
+		if err := propagateLight(b.owner.world, b.pos.X, b.pos.Y, b.pos.Z, emission); err != nil {
 			return err
 		}
 	}

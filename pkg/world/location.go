@@ -6,11 +6,9 @@ import (
 )
 
 type Location struct {
-	X     float64
-	Y     float64
-	Z     float64
-	Yaw   float32
-	Pitch float32
+	X, Y, Z float64
+	Yaw     float32
+	Pitch   float32
 }
 
 func NewLocation(x, y, z float64, yaw, pitch float32) Location {
@@ -73,9 +71,7 @@ func (l Location) String() string {
 }
 
 type BlockPos struct {
-	X int32
-	Y int32
-	Z int32
+	X, Y, Z int32
 }
 
 func NewBlockPos(x, y, z int32) BlockPos {
@@ -131,12 +127,11 @@ func NewChunkPos(x, z int32) ChunkPos {
 }
 
 type ChunkPos struct {
-	X int32
-	Z int32
+	X, Z int32
 }
 
-func (p ChunkPos) Add(other ChunkPos) ChunkPos {
-	return ChunkPos{X: p.X + other.X, Z: p.Z + other.Z}
+func (c ChunkPos) Add(other ChunkPos) ChunkPos {
+	return ChunkPos{X: c.X + other.X, Z: c.Z + other.Z}
 }
 
 func (c ChunkPos) Neighbours() [4]ChunkPos {
@@ -150,4 +145,15 @@ func (c ChunkPos) Neighbours() [4]ChunkPos {
 
 func (c ChunkPos) String() string {
 	return fmt.Sprintf("ChunkPos(X: %d, Z: %d)", c.X, c.Z)
+}
+
+// WorldToChunkLocal converts absolute coordinates to local position within a chunk
+func WorldToChunkLocal(x, y, z int32) (cp ChunkPos, cx, cy, cz uint32) {
+	cp.X = x >> 4
+	cp.Z = z >> 4
+	cs := int32(ChunkSize)
+	cx = uint32((x%cs + cs) % cs)
+	cz = uint32((z%cs + cs) % cs)
+	cy = uint32(y)
+	return
 }

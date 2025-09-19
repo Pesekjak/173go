@@ -96,19 +96,19 @@ func (w *World) LoadChunk(pos ChunkPos) (*Chunk, error) {
 		return loaded, nil
 	}
 
-	chunk, err := newChunk(pos, func(block Block) error {
+	chunk, err := newChunk(w, pos, func(block Block) error {
 		return nil // no block updates for now
 	})
 	if err != nil {
 		return nil, err
 	}
+	w.chunks[pos] = chunk
 	if err = w.generator.GenerateBlocks(chunk); err != nil {
 		return nil, err
 	}
 	if err = lightChunkBorders(w, chunk); err != nil {
 		return nil, err
 	}
-	w.chunks[pos] = chunk
 	return chunk, nil
 }
 
